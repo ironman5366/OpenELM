@@ -46,24 +46,8 @@ class PoetryGenotype(PromptGenotype):
         return self.poem
 
     def evaluate(self, model) -> float:
-        quality_str = f"""{self.poem}
-Rate the quality of the above poem on a scale from 1 to 10. Answer in JSON with the key 'quality'.
-"""
-        diversity_str = f"""{self.poem}
-What genre is this poem closest to from the following list: ["haiku", "sonnet", "ballad", "limerick", "hymn"]
-What tone is this poem closest to from the following list: ["happy", "dark", "mysterious", "romantic", "reflective"]
-
-Respond in JSON with the keys "genre" and "tone".
-"""
-        quality_result = model([HumanMessage(content=quality_str)]).content
-        diversity_result = model([HumanMessage(content=diversity_str)]).content
-        try:
-            self.quality = json.loads(quality_result)["quality"]
-            self.genre = json.loads(diversity_result)["genre"]
-            self.tone = json.loads(diversity_result)["tone"]
-            return float(self.quality)
-        except Exception:
-            return -np.inf
+        reward_result = model([HumanMessage(content=self.poem)]).squeeze().detach().cpu()
+        return reward_result
 
     def to_phenotype(self) -> Optional[np.ndarray]:
         if isinstance(self.genre, str) and isinstance(self.tone, str):
