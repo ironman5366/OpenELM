@@ -1,3 +1,4 @@
+import asyncio
 import json
 import functools
 import os
@@ -281,16 +282,10 @@ class InferenceServerHuggingFaceLLM(LLM):
                     for logits in logits
                 ]
             else:
-                input_ids_len: int = batched_prompts["input_ids"].shape[1]
-                with torch.inference_mode():
-                    tokens = self.inference_server_model.generate(
-                        **batched_prompts,
-                        pad_token_id=self.tokenizer.pad_token_id,
-                    )
-                    texts: list[str] = self.tokenizer.batch_decode(
-                        tokens[:, input_ids_len:, ...]
-                    )
-                generations = [Generation(text=text) for text in texts]
+                texts = asyncio.run(self.model.generate(
+                    prompts=batched_prompts,
+                ))
+                generations = [Generation(text=text["outputs"][0]) for text in texts]
 
             for j, prompt in enumerate(prompts[start_index:end_index]):
                 slice_start = j * self.config.num_return_sequences
