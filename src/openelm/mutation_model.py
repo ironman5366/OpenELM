@@ -166,13 +166,13 @@ class HuggingFaceReward(LLM):
     model: Any = None
     tokenizer: Any = None
     device: Any = None
-    
+
     class Config:
         """Configuration for this pydantic object."""
 
         extra = Extra.allow
 
-    @root_validator
+    # @root_validator
     def setup(cls, values: dict[str, Any]) -> dict[str, Any]:
         """Validate the config."""
         os.environ["TOKENIZERS_PARALLELISM"] = "false"
