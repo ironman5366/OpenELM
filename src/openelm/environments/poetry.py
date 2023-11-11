@@ -74,6 +74,7 @@ class PoetryEvolution(BaseEnvironment[PoetryGenotype]):
         self.mutation_model = get_model(mutation_model.config)
         self.eval_model = self.mutation_model
         del mutation_model
+        self.reward_model = get_model(config=config.reward_model_config)
 
         self.seed_str = """
 Fields of green waves under

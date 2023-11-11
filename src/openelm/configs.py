@@ -147,6 +147,10 @@ class QDEnvConfig(EnvConfig):
             [0, 5],
         ]
     )
+    reward_model_config = ModelConfig(
+        model_path='OpenAssistant/reward-model-deberta-v3-large-v2',
+        model_type='hf-reward',
+    )
 
 
 @dataclass
