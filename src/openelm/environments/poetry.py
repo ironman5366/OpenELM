@@ -9,6 +9,8 @@ from openelm.environments.base import BaseEnvironment
 from openelm.environments.prompt.prompt import PromptGenotype
 from openelm.mutation_model import MutationModel, get_model
 
+reward_name = "OpenAssistant/reward-model-deberta-v3-large-v2"
+
 
 class PoetryGenotype(PromptGenotype):
     """

@@ -1,3 +1,4 @@
+import json
 import functools
 import os
 import re
@@ -17,11 +18,19 @@ from transformers import BatchEncoding
 from openelm.codegen import model_setup, set_seed, truncate
 from openelm.configs import ModelConfig
 from openelm.utils.diff_eval import apply_diff, split_diff
+from openelm.inference_hook import vLLMHook
+from dotenv import load_dotenv
+
+load_dotenv()
+
+assert "SERVERS_LIST" in os.environ, "Must define SERVERS_LIST in .env"
+
+SERVERS_LIST = os.environ["SERVERS_LIST"]
 
 
 def get_model(config: ModelConfig):
     if config.model_type == "hf":
-        return HuggingFaceLLM(config=config)
+        return InferenceServerHuggingFaceLLM(config=config)
     elif config.model_type == "openai":
         # Adapt config here
         cfg: dict = {
@@ -148,6 +157,109 @@ class DiffModel(PromptModel):
                     diff_hunk = diff_hunk[:nme_idx]
                 outputs.append(apply_diff(prompts[i], diff_hunk))
         return outputs
+
+
+class InferenceServerHuggingFaceLLM(LLM):
+    config: ModelConfig
+    model: Any = None
+    tokenizer: Any = None
+    device: Any = None
+
+
+    class Config:
+        """Configuration for this pydantic object."""
+
+        extra = Extra.allow
+
+    @root_validator
+    def setup(cls, values: dict[str, Any]) -> dict[str, Any]:
+        """Validate the config."""
+
+        os.environ["TOKENIZERS_PARALLELISM"] = "false"
+        if values["config"] is None:
+            raise ValueError("Config must be provided.")
+        if (
+            values["model"] is None
+            and values["tokenizer"] is None
+            and values["device"] is None
+        ):
+            values["model"] = vLLMHook(
+                model_path=values["config"].model_path,
+                tensor_parallel_size=1,
+                servers=json.loads(os.environ["SERVERS_LIST"]),
+                sems=5,
+            )
+            _, values["tokenizer"], values["device"] = model_setup(
+                values["config"]
+            )
+        return values
+
+    @property
+    def _llm_type(self) -> str:
+        """Return type of llm."""
+        return "huggingface"
+
+    def _call(self, prompt: str, stop: Optional[list[str]] = None) -> str:
+        """Run the LLM on the given prompt and input."""
+        raise NotImplementedError
+
+    def _generate(
+        self, prompts: list[str], stop: Optional[list[str]] = None
+    ) -> LLMResult:
+        """Run the LLM on the given prompt and input."""
+
+        batch_size = self.config.batch_size
+        total_batches = (len(prompts) + batch_size - 1) // batch_size
+
+        encodings = self.tokenizer(
+            prompts,
+            truncation=True,
+            padding=True,
+            return_tensors="pt",
+        ).to(self.device)
+
+        generations_dict: dict[str, list[Generation]] = defaultdict(list)
+
+        for i in range(total_batches):
+            start_index = i * batch_size
+            end_index = min((i + 1) * batch_size, len(prompts))
+            batched_prompts = BatchEncoding(
+                {
+                    "input_ids": encodings["input_ids"][start_index:end_index],
+                    "attention_mask": encodings["attention_mask"][
+                        start_index:end_index
+                    ],
+                }
+            ).to(self.device)
+            if self.config.logits_only:
+                with torch.inference_mode():
+                    outputs = self.model(**batched_prompts)
+                    if i == 0:
+                        logits = outputs.logits
+                    else:
+                        logits = torch.cat((logits, outputs.logits), dim=0)
+                generations: list[Generation] = [
+                    Generation(text="", generation_info={"logits": logits})
+                    for logits in logits
+                ]
+            else:
+                input_ids_len: int = batched_prompts["input_ids"].shape[1]
+                with torch.inference_mode():
+                    tokens = self.inference_server_model.generate(
+                        **batched_prompts,
+                        pad_token_id=self.tokenizer.pad_token_id,
+                    )
+                    texts: list[str] = self.tokenizer.batch_decode(
+                        tokens[:, input_ids_len:, ...]
+                    )
+                generations = [Generation(text=text) for text in texts]
+
+            for j, prompt in enumerate(prompts[start_index:end_index]):
+                slice_start = j * self.config.num_return_sequences
+                slice_end = slice_start + self.config.num_return_sequences
+                generations_dict[prompt].extend(generations[slice_start:slice_end])
+
+        return LLMResult(generations=list(generations_dict.values()))
 
 
 class HuggingFaceLLM(LLM):
