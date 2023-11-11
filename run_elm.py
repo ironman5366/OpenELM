@@ -13,7 +13,7 @@ import hydra
 from hydra.core.hydra_config import HydraConfig
 from omegaconf import OmegaConf
 
-from src.openelm import ELM
+from openelm import ELM
 
 
 @hydra.main(
