@@ -44,6 +44,8 @@ def get_model(config: ModelConfig):
             return ChatOpenAI(**cfg)
         else:
             return OpenAI(**cfg)
+    elif config.model_type == "hf-reward":
+        return HuggingFaceReward(config=config)
     else:
         raise NotImplementedError
 
@@ -157,6 +159,42 @@ class DiffModel(PromptModel):
                     diff_hunk = diff_hunk[:nme_idx]
                 outputs.append(apply_diff(prompts[i], diff_hunk))
         return outputs
+
+class HuggingFaceReward(LLM):
+    config: ModelConfig
+    model: Any = None
+    tokenizer: Any = None
+    device: Any = None
+    
+    class Config:
+        """Configuration for this pydantic object."""
+
+        extra = Extra.allow
+
+    @root_validator
+    def setup(cls, values: dict[str, Any]) -> dict[str, Any]:
+        """Validate the config."""
+        os.environ["TOKENIZERS_PARALLELISM"] = "false"
+        if values["config"] is None:
+            raise ValueError("Config must be provided.")
+        if (
+            values["model"] is None
+            and values["tokenizer"] is None
+            and values["device"] is None
+        ):
+            values["model"], values["tokenizer"], values["device"] = model_setup(
+                values["config"]
+            )
+        return values
+
+    @property
+    def _llm_type(self) -> str:
+        """Return type of llm."""
+        return "reward"
+
+    def _call(self, prompt: str, stop: Optional[list[str]] = None) -> str:
+        """Compute the reward for the prompt."""
+        self.model()
 
 
 class InferenceServerHuggingFaceLLM(LLM):
@@ -294,9 +332,18 @@ class HuggingFaceLLM(LLM):
         """Return type of llm."""
         return "huggingface"
 
-    def _call(self, prompt: str, stop: Optional[list[str]] = None) -> str:
+    def _call(self, prompt: str, stop: Optional[list[str]] = None):
         """Run the LLM on the given prompt and input."""
-        raise NotImplementedError
+        encodings = self.tokenizer(
+            prompts,
+            truncation=True,
+            padding=True,
+            return_tensors="pt",
+        ).to(self.device)
+        with torch.inference_mode():
+            outputs = self.model(**encodings)
+            logits = outputs.logits
+        return logits  
 
     def _generate(
         self, prompts: list[str], stop: Optional[list[str]] = None
