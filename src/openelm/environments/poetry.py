@@ -48,7 +48,9 @@ class PoetryGenotype(PromptGenotype):
         return self.poem
 
     def evaluate(self, model) -> float:
-        reward_result = model([HumanMessage(content=self.poem)]).squeeze().detach().cpu()
+        # import ipdb; ipdb.set_trace()
+        #print(model)
+        reward_result = model(self.poem).squeeze().detach().cpu()
         return reward_result
 
     def to_phenotype(self) -> Optional[np.ndarray]:
@@ -128,6 +130,9 @@ Winds whisper; normality reigns.
             results.append(
                 self.mutation_model(HumanMessage(content=prompt["prompt"]).content)
             )
+        print("random...")
+        print(self.mutation_model)
+        print([c for c in results])
         return [PoetryGenotype(poem=c) for c in results]
 
     def mutate(self, genomes: list[PoetryGenotype]) -> list[PoetryGenotype]:
@@ -140,4 +145,4 @@ Winds whisper; normality reigns.
         return [PoetryGenotype(poem=c) for c in results]
 
     def fitness(self, x: PoetryGenotype) -> float:
-        return x.evaluate(self.eval_model)
+        return x.evaluate(self.reward_model)

@@ -17,7 +17,7 @@ from openelm.configs import ModelConfig
 
 def set_seed(seed=None, deterministic=False) -> int:
     if seed is None:
-        seed = np.random.default_rng().integers(2**32 - 1)
+        seed = int(np.random.default_rng().integers(2**32 - 1))
     random.seed(seed)
     os.environ["PYTHONHASHSEED"] = str(seed)
     np.random.seed(seed)
