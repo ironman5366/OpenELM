@@ -432,6 +432,7 @@ class MAPElitesBase:
         # into the behavior space one-by-one.
         for individual in new_individuals:
             fitness = self.env.fitness(individual)
+            # import ipdb; ipdb.set_trace()
             if np.isinf(fitness):
                 continue
             phenotype = individual.to_phenotype()

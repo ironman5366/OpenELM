@@ -46,8 +46,9 @@ class DiffModelConfig(ModelConfig):
 @dataclass
 class QDConfig(BaseConfig):
     init_steps: int = 250
-    total_steps: int = 2500
-    history_length: int = 1
+    # total_steps: int = 2500
+    total_steps: int = 500
+    history_length: int = 10
     save_history: bool = True
     save_snapshot_interval: int = 10
     log_snapshot_dir: str = ""

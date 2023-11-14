@@ -90,7 +90,7 @@ class BaseEnvironment(ABC, Generic[GenoType]):
 
     @property
     def max_fitness(self) -> int:
-        return 0
+        return -10
 
     @property
     # [starts, endings) of search intervals

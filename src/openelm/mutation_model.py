@@ -195,33 +195,34 @@ class InferenceServerHuggingFaceLLM:
             )
 
     def __call__(
+        self, prompt: str
+    ) -> str:
+        async def get_results(prompt):
+            async with sema:
+                texts = await self.model.generate(prompts=[prompt], max_new_tokens=256)
+                return texts
+        # This portion needs to be modified to handle the coroutine and get the result
+        texts = asyncio.run(get_results(prompt))
+
+        # generations = [Generation(text=text["outputs"][0]) for text in texts]
+        return texts[0]["outputs"][0]
+
+    def generate(
         self, prompts: list[str], stop: Optional[list[str]] = None
     ) -> LLMResult:
         """Run the LLM on the given prompt and input."""
+        async def get_results(prompts):
+            async with sema:
+                texts = await self.model.generate(prompts=prompts, max_new_tokens=256)
+                return texts
+        # This portion needs to be modified to handle the coroutine and get the result
+        texts = asyncio.run(get_results(prompts))
 
-        batch_size = self.config.batch_size
-        total_batches = (len(prompts) + batch_size - 1) // batch_size
+        generations = [Generation(text=text["outputs"][0]) for text in texts]
 
-        generations_dict: dict[str, list[Generation]] = defaultdict(list)
-
-        for i in range(total_batches):
-            start_index = i * batch_size
-            end_index = min((i + 1) * batch_size, len(prompts))
-
-            batched_prompts = prompts[start_index:end_index]
-            async def get_results(batched_prompts):
-                async with sema as response:
-                    texts = await self.model.generate(prompts=batched_prompts)
-                    return texts
-            # This portion needs to be modified to handle the coroutine and get the result
-            texts = asyncio.run(get_results(batched_prompts))
-
-            generations = [Generation(text=text["outputs"][0]) for text in texts]
-
-            for j, prompt in enumerate(prompts[start_index:end_index]):
-                slice_start = j * self.config.num_return_sequences
-                slice_end = slice_start + self.config.num_return_sequences
-                generations_dict[prompt].extend(generations[slice_start:slice_end])
+        generations_dict = {}
+        for j, prompt in enumerate(prompts):
+            generations_dict[prompt].extend(generations[j])
 
         # import ipdb; ipdb.set_trace()
         return LLMResult(generations=list(generations_dict.values()))

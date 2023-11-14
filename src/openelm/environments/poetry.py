@@ -50,7 +50,7 @@ class PoetryGenotype(PromptGenotype):
     def evaluate(self, model) -> float:
         # import ipdb; ipdb.set_trace()
         #print(model)
-        reward_result = model(self.poem).squeeze().detach().cpu()
+        reward_result = model(self.poem).squeeze().detach().cpu().item()
         return reward_result
 
     def to_phenotype(self) -> Optional[np.ndarray]:
@@ -74,6 +74,7 @@ class PoetryEvolution(BaseEnvironment[PoetryGenotype]):
         self.genotype_space = np.array(self.config.behavior_space).T
         self.genotype_ndim = self.genotype_space.shape[1]
         self.mutation_model = get_model(mutation_model.config)
+        # self.mutation_model = mutation_model
         self.eval_model = self.mutation_model
         del mutation_model
         self.reward_model = get_model(config=config.reward_model_config)
@@ -130,19 +131,18 @@ Winds whisper; normality reigns.
             results.append(
                 self.mutation_model(HumanMessage(content=prompt["prompt"]).content)
             )
-        print("random...")
-        print(self.mutation_model)
-        print([c for c in results])
-        return [PoetryGenotype(poem=c) for c in results]
+        return [PoetryGenotype(poem=c, genre=prompt_list[i]["target_genre"], tone=prompt_list[i]["target_tone"]) for i, c in enumerate(results)]
 
     def mutate(self, genomes: list[PoetryGenotype]) -> list[PoetryGenotype]:
         prompt_list: list[dict[str, str]] = list(map(self.construct_prompt, genomes))
         results = []
+        print("mutating...")
         for prompt in prompt_list:
             results.append(
                 self.mutation_model(HumanMessage(content=prompt["prompt"]).content)
             )
-        return [PoetryGenotype(poem=c) for c in results]
+        # return [PoetryGenotype(poem=c) for c in results]
+        return [PoetryGenotype(poem=c, genre=prompt_list[i]["target_genre"], tone=prompt_list[i]["target_tone"]) for i, c in enumerate(results)]
 
     def fitness(self, x: PoetryGenotype) -> float:
         return x.evaluate(self.reward_model)
