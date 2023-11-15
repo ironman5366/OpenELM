@@ -21,7 +21,7 @@ class ModelConfig(BaseConfig):
     temp: float = 1.1
     gen_max_len: int = 512
     batch_size: int = 10
-    model_type: str = "hf"  # Can be "hf", "openai", etc
+    model_type: str = "inference"  # Can be "hf", "openai", etc
     model_path: str = MISSING  # Can be HF model name or path to local model
     logits_only: bool = False
     do_sample: bool = True
