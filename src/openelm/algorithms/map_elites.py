@@ -432,6 +432,7 @@ class MAPElitesBase:
         # into the behavior space one-by-one.
         for individual in new_individuals:
             fitness = self.env.fitness(individual)
+            # import ipdb; ipdb.set_trace()
             if np.isinf(fitness):
                 continue
             phenotype = individual.to_phenotype()
@@ -452,6 +453,7 @@ class MAPElitesBase:
 
             # If new fitness greater than old fitness in niche, replace.
             if fitness > self.fitnesses[map_ix]:
+                print(f"Replaced {self.fitnesses[map_ix]} with {fitness}.")
                 self.fitnesses[map_ix] = fitness
                 self.genomes[map_ix] = individual
 
@@ -568,6 +570,7 @@ class MAPElitesBase:
 
             plt.figure()
             plt.pcolor(map2d, cmap="inferno")
+            plt.colorbar()
             plt.savefig(f"{save_path}/MAPElites_vis.png")
         plt.close("all")
 
