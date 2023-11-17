@@ -31,8 +31,10 @@ SERVERS_LIST = os.environ["SERVERS_LIST"]
 
 
 def get_model(config: ModelConfig):
-    if config.model_type == "hf":
+    if config.model_type == "inference":
         return InferenceServerHuggingFaceLLM(config=config)
+    elif config.model_type == "hf":
+        return HuggingFaceLLM(config=config)
     elif config.model_type == "openai":
         # Adapt config here
         cfg: dict = {
@@ -166,7 +168,9 @@ class HuggingFaceReward:
 
     def __init__(self, config: ModelConfig):
         self.tokenizer = transformers.AutoTokenizer.from_pretrained(config.model_path)
-        self.model = transformers.AutoModelForSequenceClassification.from_pretrained(config.model_path).to(0)
+        self.model = transformers.AutoModelForSequenceClassification.from_pretrained(config.model_path)
+        if torch.cuda.is_available():
+            self.model = self.model.cuda()
 
 
     def __call__(self, prompt: str) -> torch.Tensor:
@@ -176,10 +180,12 @@ class HuggingFaceReward:
             truncation=True,
             padding=True,
             return_tensors="pt",
-        ).to(0)
+        )
+        if torch.cuda.is_available():
+            encodings = encodings.cuda()
         with torch.inference_mode():
             logits = self.model(**encodings).logits
-        return logits 
+        return logits
 
 sema = asyncio.BoundedSemaphore(10)
 
@@ -233,7 +239,7 @@ class InferenceServerHuggingFaceLLM:
         return LLMResult(generations=list(generations_dict.values()))
 
 
-class HuggingFaceLLM(LLM):
+class HuggingFaceLLM:#(LLM):
     config: ModelConfig
     model: Any = None
     tokenizer: Any = None
@@ -244,28 +250,22 @@ class HuggingFaceLLM(LLM):
 
         extra = Extra.allow
 
-    @root_validator
-    def setup(cls, values: dict[str, Any]) -> dict[str, Any]:
-        """Validate the config."""
-        os.environ["TOKENIZERS_PARALLELISM"] = "false"
-        if values["config"] is None:
-            raise ValueError("Config must be provided.")
-        if (
-            values["model"] is None
-            and values["tokenizer"] is None
-            and values["device"] is None
-        ):
-            values["model"], values["tokenizer"], values["device"] = model_setup(
-                values["config"]
-            )
-        return values
+    def __init__(self, config: ModelConfig):
+        self.tokenizer = transformers.AutoTokenizer.from_pretrained(config.model_path)
+        self.model = transformers.AutoModelForSequenceClassification.from_pretrained(config.model_path)
+        if torch.cuda.is_available():
+            self.model = self.model.cuda()
+            self.device = torch.device("cuda")
+        else:
+            self.device = torch.device("cpu")
 
     @property
     def _llm_type(self) -> str:
         """Return type of llm."""
         return "huggingface"
 
-    def _call(self, prompt: str, stop: Optional[list[str]] = None):
+    # def _call(self, prompt: str, stop: Optional[list[str]] = None):
+    def __call__(self, prompts: str, stop: Optional[list[str]] = None):
         """Run the LLM on the given prompt and input."""
         encodings = self.tokenizer(
             prompts,
@@ -276,9 +276,9 @@ class HuggingFaceLLM(LLM):
         with torch.inference_mode():
             outputs = self.model(**encodings)
             logits = outputs.logits
-        return logits  
+        return logits
 
-    def _generate(
+    def generate(
         self, prompts: list[str], stop: Optional[list[str]] = None
     ) -> LLMResult:
         """Run the LLM on the given prompt and input."""

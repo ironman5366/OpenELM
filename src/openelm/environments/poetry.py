@@ -146,6 +146,8 @@ Winds whisper; normality reigns.
             )
         # return [PoetryGenotype(poem=c) for c in results]
         return [PoetryGenotype(poem=c, genre=prompt_list[i]["target_genre"], tone=prompt_list[i]["target_tone"]) for i, c in enumerate(results)]
+        # return [PoetryGenotype(poem=c) for c in results]
+        return [PoetryGenotype(poem=c, genre=prompt_list[i]["target_genre"], tone=prompt_list[i]["target_tone"]) for i, c in enumerate(results)]
 
     def fitness(self, x: PoetryGenotype) -> float:
         return x.evaluate(self.reward_model)
